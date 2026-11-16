@@ -9,13 +9,22 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.BitmapShader;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Matrix;
+import android.graphics.Paint;
 import android.graphics.PixelFormat;
+import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.IBinder;
 import android.provider.Settings;
+import java.io.IOException;
+import java.io.InputStream;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -32,6 +41,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -63,7 +73,7 @@ public class OverlayService extends Service {
     // Reihenfolge nicht ändern: Index = Schlüssel für gespeicherte URL / aktiven Tab.
     // Neue Seiten immer hinten anhängen.
     private static final String[] TAB_TITLES = {
-            "PvX Wiki", "GW Wiki", "Kamadan", "GW Market", "Karte", "Teams"
+            "PvX Wiki", "GW Wiki", "Kamadan", "GW Market", "Map", "Teams", "Today"
     };
     private static final String[] TAB_HOME = {
             "https://gwpvx.fandom.com/wiki/Main_Page",
@@ -71,7 +81,8 @@ public class OverlayService extends Service {
             "https://kamadan.gwtoolbox.com/",
             "https://gwmarket.net/",
             "https://gwrevival.com/map/?c=1&x=3903&y=4791&z=5",
-            "https://gwskillbar.com/teams"
+            "https://gwskillbar.com/teams",
+            "https://foogw.github.io/"
     };
 
     // Farben im Guild-Wars-Stil
@@ -85,7 +96,10 @@ public class OverlayService extends Service {
     private WindowManager windowManager;
     private SharedPreferences prefs;
 
-    private TextView bubble;
+    // Liegt in Assets/StreamingAssets und landet so im "assets/"-Ordner der APK
+    private static final String BUBBLE_ICON_ASSET = "gwr_hub_button.png";
+
+    private ImageView bubble;
     private WindowManager.LayoutParams bubbleParams;
 
     private PanelLayout panel;
@@ -173,7 +187,7 @@ public class OverlayService extends Service {
         if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CHANNEL_ID) == null) {
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID, "GWR Hub Overlay", NotificationManager.IMPORTANCE_LOW);
-            channel.setDescription("Hält das Wiki-Overlay im Spiel aktiv");
+            channel.setDescription("Keeps the wiki overlay active in-game");
             channel.setShowBadge(false);
             nm.createNotificationChannel(channel);
         }
@@ -193,10 +207,10 @@ public class OverlayService extends Service {
                 ? new Notification.Builder(this, CHANNEL_ID)
                 : new Notification.Builder(this);
         b.setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle("GWR Hub Overlay aktiv")
-                .setContentText("Tippe auf den Button oben links für Wikis, Handel & Karte")
+                .setContentTitle("GWR Hub overlay active")
+                .setContentText("Tap the button in the top left for wikis, trade & map")
                 .setOngoing(true)
-                .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Overlay beenden", stopPi);
+                .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop overlay", stopPi);
         if (openPi != null) b.setContentIntent(openPi);
         Notification n = b.build();
 
@@ -210,12 +224,10 @@ public class OverlayService extends Service {
     // ------------------------------------------------------------------ Bubble (Button oben links)
 
     private void createBubble() {
-        bubble = new TextView(this);
-        bubble.setText("GW");
-        bubble.setTextColor(COLOR_GOLD);
-        bubble.setTypeface(Typeface.DEFAULT_BOLD);
-        bubble.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        bubble.setGravity(Gravity.CENTER);
+        bubble = new ImageView(this);
+        bubble.setScaleType(ImageView.ScaleType.FIT_XY);
+        Bitmap icon = loadCircularIcon(BUBBLE_ICON_ASSET);
+        if (icon != null) bubble.setImageBitmap(icon);
         updateBubbleStyle();
 
         bubbleParams = new WindowManager.LayoutParams(
@@ -282,9 +294,39 @@ public class OverlayService extends Service {
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.OVAL);
         bg.setColor(panelShown ? COLOR_BUBBLE_ACTIVE : COLOR_BUBBLE);
-        bg.setStroke(dp(2), COLOR_GOLD);
-        bubble.setBackground(bg);
+        bubble.setBackground(bg); // Fallback, falls das Bild fehlt
+
+        // Goldener Ring über dem Bild
+        GradientDrawable ring = new GradientDrawable();
+        ring.setShape(GradientDrawable.OVAL);
+        ring.setColor(Color.TRANSPARENT);
+        ring.setStroke(dp(2), panelShown ? COLOR_TEXT : COLOR_GOLD);
+        bubble.setForeground(ring);
         bubble.setAlpha(panelShown ? 1f : 0.85f);
+    }
+
+    /** Lädt ein Bild aus den APK-Assets (Unity StreamingAssets) und schneidet es kreisförmig aus. */
+    private Bitmap loadCircularIcon(String assetName) {
+        Bitmap src;
+        try (InputStream in = getAssets().open(assetName)) {
+            src = BitmapFactory.decodeStream(in);
+        } catch (IOException e) {
+            return null;
+        }
+        if (src == null) return null;
+
+        int size = Math.min(src.getWidth(), src.getHeight());
+        Bitmap out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(out);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        BitmapShader shader = new BitmapShader(src, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+        Matrix m = new Matrix();
+        m.setTranslate(-(src.getWidth() - size) / 2f, -(src.getHeight() - size) / 2f);
+        shader.setLocalMatrix(m);
+        paint.setShader(shader);
+        canvas.drawCircle(size / 2f, size / 2f, size / 2f, paint);
+        src.recycle();
+        return out;
     }
 
     private void clampBubble() {

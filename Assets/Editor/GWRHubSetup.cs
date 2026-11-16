@@ -30,19 +30,19 @@ namespace GWRHub.EditorTools
         private const string PackageName = "com.gwrhub.app";
         private const string ApkPath = "Builds/GWRHub.apk";
 
-        [MenuItem("GWR Hub/1. Projekt einrichten")]
+        [MenuItem("GWR Hub/1. Set up project")]
         public static void SetupProject()
         {
             CreateSceneIfMissing();
             ConfigurePlayerSettings();
             AssetDatabase.SaveAssets();
-            Debug.Log("[GWR Hub] Projekt eingerichtet. Jetzt 'GWR Hub/2. APK bauen' ausführen.");
+            Debug.Log("[GWR Hub] Project set up. Now run 'GWR Hub/2. Build APK'.");
             EditorUtility.DisplayDialog("GWR Hub",
-                "Projekt eingerichtet.\n\nSzene: " + ScenePath + "\nPaket: " + PackageName +
-                "\n\nAls Nächstes: GWR Hub > 2. APK bauen", "OK");
+                "Project set up.\n\nScene: " + ScenePath + "\nPackage: " + PackageName +
+                "\n\nNext: GWR Hub > 2. Build APK", "OK");
         }
 
-        [MenuItem("GWR Hub/2. APK bauen")]
+        [MenuItem("GWR Hub/2. Build APK")]
         public static void BuildApk()
         {
             SetupProjectSilently();
@@ -62,12 +62,12 @@ namespace GWRHub.EditorTools
             BuildReport report = BuildPipeline.BuildPlayer(options);
             if (report.summary.result == BuildResult.Succeeded)
             {
-                Debug.Log("[GWR Hub] APK gebaut: " + Path.GetFullPath(ApkPath));
+                Debug.Log("[GWR Hub] APK built: " + Path.GetFullPath(ApkPath));
                 EditorUtility.RevealInFinder(ApkPath);
             }
             else
             {
-                Debug.LogError("[GWR Hub] Build fehlgeschlagen: " + report.summary.result);
+                Debug.LogError("[GWR Hub] Build failed: " + report.summary.result);
             }
         }
 
@@ -177,7 +177,7 @@ namespace GWRHub.EditorTools
 #if UNITY_2023_1_OR_NEWER
             if (PlayerSettings.Android.applicationEntry != AndroidApplicationEntry.Activity)
                 throw new BuildFailedException(
-                    "[GWR Hub] Application Entry Point muss 'Activity' sein, sonst fehlt das App-Symbol.");
+                    "[GWR Hub] Application Entry Point must be 'Activity', otherwise the app icon is missing.");
 #endif
         }
     }

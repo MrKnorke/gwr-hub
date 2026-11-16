@@ -69,7 +69,7 @@ namespace GWRHub
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             // Android 13+: ohne diese Berechtigung läuft das Overlay trotzdem,
-            // nur die Benachrichtigung (mit "Overlay beenden") ist dann unsichtbar.
+            // nur die Benachrichtigung (mit "Stop overlay") ist dann unsichtbar.
             if (OverlayPlugin.SdkInt >= 33 && !Permission.HasUserAuthorizedPermission(NotificationPermission))
                 Permission.RequestUserPermission(NotificationPermission);
 #endif
@@ -92,19 +92,19 @@ namespace GWRHub
             GUILayout.BeginArea(new Rect((w - panelW) / 2f, 24f, panelW, h - 48f));
 
             GUILayout.Label("GWR Hub", _title);
-            GUILayout.Label("Overlay für Guild Wars Reforged", _text);
+            GUILayout.Label("Overlay for Guild Wars Reforged", _text);
             GUILayout.Space(16);
 
             GUILayout.BeginVertical(_box);
-            GUILayout.Label("Über anderen Apps einblenden:  " + (_hasPermission ? "erlaubt" : "fehlt"), _text);
-            GUILayout.Label("Overlay:  " + (_running ? "aktiv" : "inaktiv"), _text);
+            GUILayout.Label("Display over other apps:  " + (_hasPermission ? "allowed" : "missing"), _text);
+            GUILayout.Label("Overlay:  " + (_running ? "active" : "inactive"), _text);
             GUILayout.EndVertical();
             GUILayout.Space(16);
 
             if (!_hasPermission)
             {
-                GUILayout.Label("Bitte erlaube GWR Hub im nächsten Bildschirm, über anderen Apps angezeigt zu werden.", _text);
-                if (GUILayout.Button("Berechtigung erteilen", _button))
+                GUILayout.Label("On the next screen, please allow GWR Hub to display over other apps.", _text);
+                if (GUILayout.Button("Grant permission", _button))
                 {
                     _autoStartPending = true;
                     OverlayPlugin.RequestOverlayPermission();
@@ -112,15 +112,15 @@ namespace GWRHub
             }
             else if (!_running)
             {
-                if (GUILayout.Button("Overlay starten", _button))
+                if (GUILayout.Button("Start overlay", _button))
                     _running = OverlayPlugin.Start();
             }
             else
             {
-                if (GUILayout.Button("Zum Spiel wechseln", _button))
+                if (GUILayout.Button("Switch to game", _button))
                     OverlayPlugin.MoveAppToBackground();
                 GUILayout.Space(8);
-                if (GUILayout.Button("Overlay beenden", _button))
+                if (GUILayout.Button("Stop overlay", _button))
                 {
                     OverlayPlugin.Stop();
                     _running = false;
@@ -129,9 +129,9 @@ namespace GWRHub
 
             GUILayout.Space(20);
             GUILayout.Label(
-                "So geht's: Overlay starten, Guild Wars Reforged öffnen und oben links auf den GW-Button tippen. " +
-                "Dort findest du PvX Wiki, GW Wiki, Kamadan-Handel, GW Market, die Karte und Teams. Mit „—“ oder der Zurück-Taste minimierst du das Fenster – " +
-                "die aktuelle Seite bleibt erhalten. Den Button kannst du per Ziehen verschieben.",
+                "How it works: start the overlay, open Guild Wars Reforged and tap the GW button in the top left. " +
+                "There you'll find PvX Wiki, GW Wiki, Kamadan trade, GW Market, the map, teams and today's dailies. Use \"—\" or the back button to minimize the window – " +
+                "the current page is kept. You can move the button by dragging it.",
                 _text);
 
             GUILayout.EndArea();

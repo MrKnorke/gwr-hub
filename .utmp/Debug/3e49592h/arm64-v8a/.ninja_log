@@ -1,14 +1,14 @@
 # ninja log v5
-118	657	8164002944120895	FramePacing/CMakeFiles/swappywrapper.dir/UnitySwappyWrapper.cpp.o	971d2b1bd7994e4b
+5	357	8164886369822937	FramePacing/CMakeFiles/swappywrapper.dir/UnitySwappyWrapper.cpp.o	971d2b1bd7994e4b
 14	2880	8164002967157498	GameActivity/CMakeFiles/game.dir/UGAApplication.cpp.o	5f129f8b6c35f6af
+357	655	8164886372165317	D:/WorkSpace/GWR-Hub/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/Debug/3e49592h/obj/arm64-v8a/libswappywrapper.so	d773b19955074a81
 109	2801	8164002966087177	GameActivity/CMakeFiles/game.dir/UGAInputKeyEvent.cpp.o	9ed2f9cfc46069f5
-658	2002	8164002955028682	D:/WorkSpace/GWR-Hub/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/Debug/3e49592h/obj/arm64-v8a/libswappywrapper.so	d773b19955074a81
 30	2828	8164002966627209	GameActivity/CMakeFiles/game.dir/UGAEntry.cpp.o	9d5986e6ac38b123
-48	2858	8164002966932347	GameActivity/CMakeFiles/game.dir/UGAInputMotionEvent.cpp.o	ecfc9585342e9862
 22	2836	8164002966687204	GameActivity/CMakeFiles/game.dir/UGADebug.cpp.o	c0d824a18253e683
-98	2925	8164002967627489	GameActivity/CMakeFiles/game.dir/UGASoftKeyboard.cpp.o	19c44c9ba111c868
+48	2858	8164002966932347	GameActivity/CMakeFiles/game.dir/UGAInputMotionEvent.cpp.o	ecfc9585342e9862
 1	2914	8164002967537511	GameActivity/CMakeFiles/game.dir/UGAConfiguration.cpp.o	c47e6262a01987e5
+98	2925	8164002967627489	GameActivity/CMakeFiles/game.dir/UGASoftKeyboard.cpp.o	19c44c9ba111c868
 40	2987	8164002968249479	GameActivity/CMakeFiles/game.dir/UGAInput.cpp.o	6e404d24379f6d05
 2988	3086	8164002969252707	D:/WorkSpace/GWR-Hub/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/Debug/3e49592h/obj/arm64-v8a/libgame.so	f3cca1e959526c95
-5	357	8164886369822937	FramePacing/CMakeFiles/swappywrapper.dir/UnitySwappyWrapper.cpp.o	971d2b1bd7994e4b
-357	655	8164886372165317	D:/WorkSpace/GWR-Hub/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/Debug/3e49592h/obj/arm64-v8a/libswappywrapper.so	d773b19955074a81
+5	308	8165223637051076	FramePacing/CMakeFiles/swappywrapper.dir/UnitySwappyWrapper.cpp.o	971d2b1bd7994e4b
+308	546	8165223639062939	D:/WorkSpace/GWR-Hub/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/Debug/3e49592h/obj/arm64-v8a/libswappywrapper.so	d773b19955074a81
