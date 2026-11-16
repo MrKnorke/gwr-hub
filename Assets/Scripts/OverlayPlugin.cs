@@ -47,10 +47,10 @@ namespace GWRHub
         public static bool IsRunning => _simRunning;
         public static int SdkInt => 0;
 
-        public static void RequestOverlayPermission() => Debug.Log("[GWR Hub] (Editor) Overlay-Berechtigung angefragt");
-        public static bool Start() { _simRunning = true; Debug.Log("[GWR Hub] (Editor) Overlay gestartet"); return true; }
-        public static void Stop() { _simRunning = false; Debug.Log("[GWR Hub] (Editor) Overlay gestoppt"); }
-        public static void MoveAppToBackground() => Debug.Log("[GWR Hub] (Editor) App in den Hintergrund");
+        public static void RequestOverlayPermission() => Debug.Log("[GWR Hub] (Editor) Overlay permission requested");
+        public static bool Start() { _simRunning = true; Debug.Log("[GWR Hub] (Editor) Overlay started"); return true; }
+        public static void Stop() { _simRunning = false; Debug.Log("[GWR Hub] (Editor) Overlay stopped"); }
+        public static void MoveAppToBackground() => Debug.Log("[GWR Hub] (Editor) App moved to background");
 #endif
     }
 }

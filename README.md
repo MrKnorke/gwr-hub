@@ -13,8 +13,9 @@ A Unity app that activates a floating overlay on launch:
   | GW Wiki | wiki.guildwars.com |
   | Kamadan | kamadan.gwtoolbox.com (trade chat) |
   | GW Market | gwmarket.net |
-  | Karte (Map) | gwrevival.com/map |
+  | Map | gwrevival.com/map |
   | Teams | gwskillbar.com/teams |
+  | Today | foogw.github.io (Guild Wars Today: dailies) |
 - **Minimizing** ("—", the Back key, or tapping the button again) only hides the popup. The open page and its history are kept. The current URL of each tab is also saved and reloaded even after the overlay restarts.
 - Quit via the notification ("Overlay beenden" / stop overlay) or in the Hub app.
 
@@ -38,8 +39,8 @@ Tab titles and URLs are defined in `OverlayService.java` in `TAB_TITLES` / `TAB_
    Unity 6 ships with Android SDK 34+, which is required for the `specialUse` foreground service type.
 2. Unity Hub → **Add → Add project from disk** → select this folder and open it.
 3. **File → Build Profiles** → Android → **Switch Platform**.
-4. Menu **GWR Hub → 1. Projekt einrichten** (set up project). This creates the scene and sets the package name, IL2CPP/ARM64, min SDK 26 and *Application Entry Point = Activity*.
-5. Menu **GWR Hub → 2. APK bauen** (build APK). The APK ends up in `Builds/GWRHub.apk`.
+4. Menu **GWR Hub → 1. Set up project**. This creates the scene and sets the package name, IL2CPP/ARM64, min SDK 26 and *Application Entry Point = Activity*.
+5. Menu **GWR Hub → 2. Build APK**. The APK ends up in `Builds/GWRHub.apk`.
    Alternatively use Build Profiles → *Build And Run* to deploy directly to the phone.
 
 ## Installation and use on the phone
@@ -71,8 +72,9 @@ Unity-App, die beim Start ein schwebendes Overlay aktiviert:
   | GW Wiki | wiki.guildwars.com |
   | Kamadan | kamadan.gwtoolbox.com (Handelschat) |
   | GW Market | gwmarket.net |
-  | Karte | gwrevival.com/map |
+  | Map | gwrevival.com/map |
   | Teams | gwskillbar.com/teams |
+  | Today | foogw.github.io (Guild Wars Today: Dailies) |
 - **Minimieren** („—“, Zurück-Taste oder erneut auf den Button tippen) blendet das Popup nur aus. Die geöffnete Seite und der Verlauf bleiben erhalten. Die aktuelle URL pro Tab wird zusätzlich gespeichert und auch nach einem Neustart des Overlays wieder geladen.
 - Beenden über die Benachrichtigung („Overlay beenden“) oder in der Hub-App.
 
@@ -96,8 +98,8 @@ Titel und URLs der Tabs stehen in `OverlayService.java` in `TAB_TITLES` / `TAB_H
    Unity 6 bringt Android SDK 34+ mit, das für den Foreground-Service-Typ `specialUse` nötig ist.
 2. Unity Hub → **Add → Add project from disk** → diesen Ordner wählen und öffnen.
 3. **File → Build Profiles** → Android → **Switch Platform**.
-4. Menü **GWR Hub → 1. Projekt einrichten**. Das erstellt die Szene und setzt Paketname, IL2CPP/ARM64, Min-SDK 26 und *Application Entry Point = Activity*.
-5. Menü **GWR Hub → 2. APK bauen**. Die APK landet in `Builds/GWRHub.apk`.
+4. Menü **GWR Hub → 1. Set up project**. Das erstellt die Szene und setzt Paketname, IL2CPP/ARM64, Min-SDK 26 und *Application Entry Point = Activity*.
+5. Menü **GWR Hub → 2. Build APK**. Die APK landet in `Builds/GWRHub.apk`.
    Alternativ über Build Profiles → *Build And Run* direkt aufs Handy.
 
 ## Installation und Nutzung auf dem Handy
