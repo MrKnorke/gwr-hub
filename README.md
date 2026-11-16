@@ -1,3 +1,63 @@
+# GWR Hub – Wiki Overlay for Guild Wars Reforged (Android)
+
+*[Deutsche Version weiter unten](#gwr-hub--wiki-overlay-für-guild-wars-reforged-android)*
+
+A Unity app that activates a floating overlay on launch:
+
+- **Small "GW" button in the top left** that sits on top of every app, including Guild Wars Reforged. You can drag it to move it; its position is saved.
+- **Tapping** it opens a popup with these tabs (the tab bar can be swiped sideways), plus Back / Forward / Reload / Home:
+
+  | Tab | Site |
+  |---|---|
+  | PvX Wiki | gwpvx.fandom.com |
+  | GW Wiki | wiki.guildwars.com |
+  | Kamadan | kamadan.gwtoolbox.com (trade chat) |
+  | GW Market | gwmarket.net |
+  | Karte (Map) | gwrevival.com/map |
+  | Teams | gwskillbar.com/teams |
+- **Minimizing** ("—", the Back key, or tapping the button again) only hides the popup. The open page and its history are kept. The current URL of each tab is also saved and reloaded even after the overlay restarts.
+- Quit via the notification ("Overlay beenden" / stop overlay) or in the Hub app.
+
+## Structure
+
+| File | Purpose |
+|---|---|
+| `Assets/Plugins/Android/OverlayService.java` | Foreground service: button, popup, WebViews, saving state |
+| `Assets/Plugins/Android/OverlayBridge.java` | Static calls for Unity (permission, start/stop) |
+| `Assets/Plugins/Android/AndroidManifest.xml` | Permissions (`SYSTEM_ALERT_WINDOW`, foreground service) + service |
+| `Assets/Scripts/HubApp.cs` | Start screen (IMGUI): request permission, start overlay automatically |
+| `Assets/Scripts/OverlayPlugin.cs` | C# wrapper around the Java plugin |
+| `Assets/Editor/GWRHubSetup.cs` | **GWR Hub** menu: set up the project and build the APK |
+
+Tab titles and URLs are defined in `OverlayService.java` in `TAB_TITLES` / `TAB_HOME`. Append new sites at the end, because the index is used to map the saved state.
+
+## Building
+
+1. Install **Unity 6** (targeted at 6000.5.x) with **Android Build Support**
+   (Unity Hub → Installs → 6000.5.8f1 → Add modules → *Android Build Support* incl. *OpenJDK* and *Android SDK & NDK Tools*).
+   Unity 6 ships with Android SDK 34+, which is required for the `specialUse` foreground service type.
+2. Unity Hub → **Add → Add project from disk** → select this folder and open it.
+3. **File → Build Profiles** → Android → **Switch Platform**.
+4. Menu **GWR Hub → 1. Projekt einrichten** (set up project). This creates the scene and sets the package name, IL2CPP/ARM64, min SDK 26 and *Application Entry Point = Activity*.
+5. Menu **GWR Hub → 2. APK bauen** (build APK). The APK ends up in `Builds/GWRHub.apk`.
+   Alternatively use Build Profiles → *Build And Run* to deploy directly to the phone.
+
+## Installation and use on the phone
+
+1. Install the APK (allow installation from unknown sources).
+2. Open GWR Hub → **Berechtigung erteilen** (grant permission) → enable GWR Hub under "Display over other apps" → go back.
+   The overlay then starts automatically. Allow notifications (Android 13+) so that "Overlay beenden" is visible in the notification bar.
+3. **Zum Spiel wechseln** (switch to game) → launch Guild Wars Reforged → tap **GW** in the top left.
+
+## Notes
+
+- If the APK is sideloaded, Android 13+ may block the overlay permission as a "restricted setting".
+  In that case, unlock it under *Settings → Apps → GWR Hub → ⋮ → Allow restricted settings*.
+- Some manufacturers (Xiaomi/MIUI, Huawei, Samsung Game Mode) have additional toggles for "Show pop-up windows" or overlays in the Game Launcher.
+- While the popup is open, it has keyboard focus (for the wiki search). Touches outside the popup still go to the game.
+
+---
+
 # GWR Hub – Wiki-Overlay für Guild Wars Reforged (Android)
 
 Unity-App, die beim Start ein schwebendes Overlay aktiviert:
