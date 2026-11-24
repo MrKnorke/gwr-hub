@@ -130,7 +130,7 @@ namespace GWRHub
             GUILayout.Space(20);
             GUILayout.Label(
                 "How it works: start the overlay, open Guild Wars Reforged and tap the GW button in the top left. " +
-                "There you'll find PvX Wiki, GW Wiki, Kamadan trade, GW Market, the map, teams and today's dailies. Use \"—\" or the back button to minimize the window – " +
+                "There you'll find PvX Wiki, GW Wiki, Kamadan trade, GW Market, the map, teams, today's dailies and Guild Wars Reforged videos on YouTube. Use \"—\" or the back button to minimize the window – " +
                 "the current page is kept. You can move the button by dragging it.",
                 _text);
 
