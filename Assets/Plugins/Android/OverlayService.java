@@ -50,6 +50,7 @@ import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -145,15 +146,19 @@ public class OverlayService extends Service {
                     + "for(var i=0;i<m.length;i++){try{m[i].pause();}catch(e){}}})();";
 
     /**
-     * true, wenn gerade ein Video läuft. Stumme Vorschau-Videos (Suchliste/Startseite) zählen
-     * nicht, auf Video-Seiten (/watch, /shorts, /live) schon.
+     * Läuft gerade ein Video, dessen Position in Sekunden, sonst -1. Stumme Vorschau-Videos
+     * (Suchliste/Startseite) zählen nicht, auf Video-Seiten (/watch, /shorts, /live) schon.
      */
-    private static final String JS_IS_PLAYING =
-            "(function(){var w=/^\\/(watch|shorts|live)/.test(location.pathname);"
-                    + "var m=document.querySelectorAll('video');"
+    private static final String JS_PLAYING_TIME =
+            "(function(){var d=document,w=/^\\/(watch|shorts|live)/.test(location.pathname);"
+                    + "var m=d.querySelectorAll('video');"
                     + "for(var i=0;i<m.length;i++){var v=m[i];"
-                    + "if(!v.paused&&!v.ended&&(w||!v.muted))return true;}"
-                    + "return false;})();";
+                    + "if(!v.paused&&!v.ended&&(w||!v.muted)){"
+                    + "var mp=d.getElementById('movie_player');"
+                    + "if(mp&&typeof mp.getCurrentTime==='function'){"
+                    + "try{var t=mp.getCurrentTime();if(typeof t==='number'&&t>=0)return t;}catch(e){}}"
+                    + "return v.currentTime||0;}}"
+                    + "return -1;})();";
 
     /**
      * Teil von {@link #JS_PIP_ENTER}, einmal je Seite: Im Mini-Player ist das Fenster nicht
@@ -302,7 +307,26 @@ public class OverlayService extends Service {
     private boolean miniUserToggled = false;
     private final Runnable resumeMiniPlayback = () -> {
         WebView yt = this.webViews[TAB_YOUTUBE];
-        if (miniShown && !miniUserToggled && yt != null) yt.evaluateJavascript(JS_PIP_RESUME, null);
+        if (miniShown && this.miniEmbed == null && !miniUserToggled && yt != null) {
+            yt.evaluateJavascript(JS_PIP_RESUME, null);
+        }
+    };
+
+    /**
+     * Mini-Player mit eigenem YouTube-Embed-Player (null = Fallback: die Seite des YouTube-Tabs
+     * wird auf das Video reduziert, siehe {@link #JS_PIP_ENTER}). Der Embed-Player kennt keine
+     * Hintergrund-Sperre wie m.youtube.com und ist viel leichter als die ganze Seite; die Seite
+     * im Tab wird solange angehalten und ausgeblendet.
+     */
+    private WebView miniEmbed;
+    /** Vom Embed-Player gemeldet: Zustand (YT.PlayerState, -1 = unbekannt) und Position in s. */
+    private int miniEmbedState = -1;
+    private double miniEmbedTime = 0;
+    private boolean miniEmbedReady = false;
+    /** Lädt der Embed-Player nicht (kein Netz, Skript blockiert …), auf die Seite zurückfallen. */
+    private static final long MINI_EMBED_TIMEOUT_MS = 10_000L;
+    private final Runnable miniEmbedTimeout = () -> {
+        if (miniShown && miniEmbed != null && !miniEmbedReady) fallbackToPageMini();
     };
 
     /** Hat der Nutzer die YouTube-Seite schon berührt? Erst dann Autoplay mit Ton erlauben. */
@@ -431,19 +455,12 @@ public class OverlayService extends Service {
         miniShown = false;
         if (bubble != null) safeRemove(bubble);
         exitFullscreen();
+        destroyMiniEmbed();
         for (int i = 0; i < webViews.length; i++) {
             WebView wv = webViews[i];
             if (wv == null) continue;
             webViews[i] = null;
-            // Laden/Wiedergabe stoppen, Clients lösen und die WebView aus dem Layout nehmen,
-            // bevor sie zerstört wird – sonst können Audio/Netzwerk kurz weiterlaufen.
-            wv.stopLoading();
-            wv.setWebChromeClient(null);
-            wv.setWebViewClient(new WebViewClient());
-            ViewGroup parent = (ViewGroup) wv.getParent();
-            if (parent != null) parent.removeView(wv);
-            wv.removeAllViews();
-            wv.destroy();
+            destroyWebView(wv);
         }
         try {
             CookieManager.getInstance().flush();
@@ -650,7 +667,7 @@ public class OverlayService extends Service {
         if (panelShown) return;
 
         boolean fromMini = miniShown;
-        leaveMiniLayout();
+        leaveMiniLayout(true); // Video läuft im Hub an derselben Stelle weiter
         applyPanelSize();
         if (fromMini) updatePanelWindow(); // Fenster ist schon da, nur wieder groß machen
         else windowManager.addView(panel, panelParams);
@@ -681,12 +698,24 @@ public class OverlayService extends Service {
             return;
         }
         exitFullscreen(); // Video läuft danach im normalen Player der Seite weiter
-        yt.evaluateJavascript(JS_IS_PLAYING, result -> {
+        yt.evaluateJavascript(JS_PLAYING_TIME, result -> {
             // Inzwischen anders entschieden (z. B. doppelt getippt, Tab gewechselt)?
             if (!panelShown || currentTab != TAB_YOUTUBE) return;
-            if ("true".equals(result)) enterMiniPlayer();
+            double time = parseJsNumber(result, -1);
+            if (time >= 0) enterMiniPlayer(time);
             else hidePanel();
         });
+    }
+
+    /** Ergebnis von evaluateJavascript als Zahl ("12.5", "null", "\"…\"" …). */
+    private static double parseJsNumber(String result, double fallback) {
+        if (result == null) return fallback;
+        try {
+            double d = Double.parseDouble(result.trim());
+            return Double.isNaN(d) || Double.isInfinite(d) ? fallback : d;
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     /** Minimieren: Popup ausblenden, WebViews und deren Verlauf bleiben erhalten. */
@@ -724,8 +753,12 @@ public class OverlayService extends Service {
 
     // ------------------------------------------------------------------ Mini-Player (Bild-in-Bild)
 
-    /** Hub wird zum kleinen, verschiebbaren Video-Player; das Spiel bekommt die Kontrolle zurück. */
-    private void enterMiniPlayer() {
+    /**
+     * Hub wird zum kleinen, verschiebbaren Video-Player; das Spiel bekommt die Kontrolle zurück.
+     * Ist auf der Seite eine Video-ID erkennbar, spielt ein eigener Embed-Player ab
+     * {@code startTime} weiter, sonst (oder wenn der Embed-Player scheitert) die Seite selbst.
+     */
+    private void enterMiniPlayer(double startTime) {
         WebView yt = webViews[TAB_YOUTUBE];
         if (!panelShown || yt == null) return;
         saveState();
@@ -742,10 +775,9 @@ public class OverlayService extends Service {
         applyMiniLayout(true);
         applyMiniSize();
         updatePanelWindow();
-        yt.evaluateJavascript(JS_PIP_ENTER, null);
-        // Manche Player pausieren beim Fokusverlust/Größenwechsel: einmal nachsehen und fortsetzen
         miniUserToggled = false;
-        ui.postDelayed(resumeMiniPlayback, 800);
+        String videoId = YouTubeLinks.videoIdOf(yt.getUrl());
+        if (videoId == null || !startEmbedMini(videoId, startTime)) startPageMini();
         setMiniControlsVisible(true); // kurz zeigen, damit man sieht, wie man ihn bedient
 
         updateBubbleStyle();
@@ -757,7 +789,7 @@ public class OverlayService extends Service {
     private void closeMiniPlayer() {
         if (!miniShown) return;
         pauseMedia(TAB_YOUTUBE);
-        leaveMiniLayout();
+        leaveMiniLayout(false);
         WebView yt = webViews[TAB_YOUTUBE];
         if (yt != null) yt.onPause();
         safeRemove(panel);
@@ -766,15 +798,198 @@ public class OverlayService extends Service {
         updateTimerUi();
     }
 
-    /** Stellt das normale Popup-Layout wieder her (Fenster bleibt, wie es ist). */
-    private void leaveMiniLayout() {
+    /**
+     * Stellt das normale Popup-Layout wieder her (Fenster bleibt, wie es ist). Lief der
+     * Embed-Player, übernimmt die Seite im Tab dessen Position und spielt bei
+     * {@code continueOnPage} weiter, falls das Video zuletzt lief.
+     */
+    private void leaveMiniLayout(boolean continueOnPage) {
         if (!miniShown) return;
         miniShown = false;
         ui.removeCallbacks(hideMiniControls);
         ui.removeCallbacks(resumeMiniPlayback);
         WebView yt = webViews[TAB_YOUTUBE];
-        if (yt != null) yt.evaluateJavascript(JS_PIP_LEAVE, null);
+        if (miniEmbed != null) {
+            double time = miniEmbedTime;
+            boolean playing = isEmbedPlaying();
+            destroyMiniEmbed();
+            if (yt != null) {
+                yt.setVisibility(View.VISIBLE);
+                yt.onResume();
+                yt.evaluateJavascript(jsSeekPage(time, continueOnPage && playing), null);
+            }
+        } else if (yt != null) {
+            yt.evaluateJavascript(JS_PIP_LEAVE, null);
+        }
         applyMiniLayout(false);
+    }
+
+    /** Fallback-Mini-Player: die Seite des Tabs zeigt nur noch ihr Video (alter Weg). */
+    private void startPageMini() {
+        WebView yt = webViews[TAB_YOUTUBE];
+        if (yt == null) return;
+        yt.evaluateJavascript(JS_PIP_ENTER, null);
+        // Manche Player pausieren beim Fokusverlust/Größenwechsel: einmal nachsehen und fortsetzen
+        ui.removeCallbacks(resumeMiniPlayback);
+        ui.postDelayed(resumeMiniPlayback, 800);
+    }
+
+    /**
+     * Startet den Embed-Player für {@code videoId} ab {@code startTime} s. Die Seite im Tab
+     * wird angehalten und ausgeblendet, damit sie neben dem Spiel keine Rechenzeit kostet.
+     *
+     * @return false, wenn kein Embed-Player angelegt werden konnte
+     */
+    private boolean startEmbedMini(String videoId, double startTime) {
+        WebView yt = webViews[TAB_YOUTUBE];
+        if (yt == null || contentFrame == null) return false;
+        String origin = YouTubeLinks.embedOrigin(getPackageName());
+        String html = YouTubeLinks.embedHostHtml(videoId, startTime, origin);
+        if (html == null) return false;
+
+        destroyMiniEmbed();
+        WebView embed;
+        try {
+            embed = createMiniEmbedWebView();
+        } catch (RuntimeException e) {
+            return false; // z. B. WebView-Update läuft gerade
+        }
+        miniEmbed = embed;
+        miniEmbedReady = false;
+        miniEmbedState = -1;
+        miniEmbedTime = startTime;
+        contentFrame.addView(embed, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        pauseMedia(TAB_YOUTUBE);
+        yt.setVisibility(View.GONE);
+        yt.onPause();
+
+        // Mit https-Basisadresse, damit YouTube eine Origin/einen Referer bekommt (sonst Fehler 153)
+        embed.loadDataWithBaseURL(origin + "/", html, "text/html", "UTF-8", null);
+        ui.removeCallbacks(miniEmbedTimeout);
+        ui.postDelayed(miniEmbedTimeout, MINI_EMBED_TIMEOUT_MS);
+        return true;
+    }
+
+    private WebView createMiniEmbedWebView() {
+        WebView wv = new HubWebView(this); // meldet im Mini-Player weiter Fokus, s. HubWebView
+        wv.setBackgroundColor(Color.BLACK);
+        WebSettings s = wv.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        // Start ohne Antippen: der Nutzer hat das Video ja gerade selbst laufen lassen
+        s.setMediaPlaybackRequiresUserGesture(false);
+        s.setSupportMultipleWindows(false);
+        CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true);
+        wv.addJavascriptInterface(new MiniEmbedBridge(wv), YouTubeLinks.EMBED_BRIDGE);
+        wv.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                // Die Hostseite bleibt; nur der eingebettete Player (Unterframe) darf navigieren
+                return request.isForMainFrame();
+            }
+        });
+        wv.setWebChromeClient(new WebChromeClient());
+        return wv;
+    }
+
+    /**
+     * Meldungen der Embed-Seite (kommen auf einem Binder-Thread an). Steht auch dem
+     * YouTube-Frame zur Verfügung, darum nur harmlose Meldungen ohne Rückgabewerte.
+     */
+    private final class MiniEmbedBridge {
+        private final WebView owner;
+
+        MiniEmbedBridge(WebView owner) {
+            this.owner = owner;
+        }
+
+        @JavascriptInterface
+        public void onReady() {
+            ui.post(() -> {
+                if (miniEmbed != owner) return;
+                miniEmbedReady = true;
+                ui.removeCallbacks(miniEmbedTimeout);
+            });
+        }
+
+        @JavascriptInterface
+        public void onState(int state, double time) {
+            ui.post(() -> {
+                if (miniEmbed != owner) return;
+                if (time >= 0 && !Double.isNaN(time) && !Double.isInfinite(time)) miniEmbedTime = time;
+                boolean wasPlaying = isEmbedPlaying();
+                miniEmbedState = state;
+                if (isEmbedPlaying() != wasPlaying) onMiniPlaybackState(isEmbedPlaying());
+            });
+        }
+
+        @JavascriptInterface
+        public void onError(int code) {
+            // 101/150: Einbetten nicht erlaubt, 153: Referer fehlt, 2/5/100: Video/Player-Fehler
+            ui.post(() -> {
+                if (miniEmbed != owner) return;
+                android.util.Log.i("GWRHub", "Mini embed player error " + code + ", using page player");
+                fallbackToPageMini();
+            });
+        }
+    }
+
+    /** Läuft (oder puffert) das Video im Embed-Player? */
+    private boolean isEmbedPlaying() {
+        return miniEmbedState == 1 || miniEmbedState == 3; // PLAYING, BUFFERING
+    }
+
+    /** Embed-Player gescheitert: an seiner Position mit der Seite selbst weiterspielen. */
+    private void fallbackToPageMini() {
+        if (!miniShown || miniEmbed == null) return;
+        double time = miniEmbedTime;
+        destroyMiniEmbed();
+        WebView yt = webViews[TAB_YOUTUBE];
+        if (yt == null) return;
+        yt.setVisibility(View.VISIBLE);
+        yt.onResume();
+        yt.evaluateJavascript(jsSeekPage(time, !miniUserToggled), null);
+        startPageMini();
+    }
+
+    private void destroyMiniEmbed() {
+        ui.removeCallbacks(miniEmbedTimeout);
+        WebView wv = miniEmbed;
+        miniEmbed = null;
+        miniEmbedReady = false;
+        miniEmbedState = -1;
+        if (wv == null) return;
+        wv.removeJavascriptInterface(YouTubeLinks.EMBED_BRIDGE);
+        destroyWebView(wv);
+    }
+
+    /**
+     * Laden/Wiedergabe stoppen, Clients lösen und die WebView aus dem Layout nehmen, bevor sie
+     * zerstört wird – sonst können Audio/Netzwerk kurz weiterlaufen.
+     */
+    private static void destroyWebView(WebView wv) {
+        wv.stopLoading();
+        wv.setWebChromeClient(null);
+        wv.setWebViewClient(new WebViewClient());
+        ViewGroup parent = (ViewGroup) wv.getParent();
+        if (parent != null) parent.removeView(wv);
+        wv.removeAllViews();
+        wv.destroy();
+    }
+
+    /** Spult das Video der Seite auf {@code seconds} und setzt es bei {@code play} fort. */
+    private static String jsSeekPage(double seconds, boolean play) {
+        String t = String.format(java.util.Locale.ROOT, "%.2f", Math.max(0, seconds));
+        return "(function(t,play){var d=document,mp=d.getElementById('movie_player');"
+                + "var v=d.querySelector('video.html5-main-video')||d.querySelector('video');"
+                + "if(mp&&typeof mp.seekTo==='function'){try{mp.seekTo(t,true);}catch(e){}}"
+                + "else if(v){try{v.currentTime=t;}catch(e){}}"
+                + "if(!play)return;"
+                + "if(mp&&typeof mp.playVideo==='function'){try{mp.playVideo();}catch(e){}}"
+                + "else if(v){var p=v.play();if(p&&p.catch)p.catch(function(){});}})("
+                + t + "," + play + ");";
     }
 
     /** Schaltet Kopfzeile, Leisten, Fensterflags usw. zwischen Popup und Mini-Player um. */
@@ -945,15 +1160,25 @@ public class OverlayService extends Service {
         ui.removeCallbacks(hideMiniControls);
         miniControls.setVisibility(show && miniShown ? View.VISIBLE : View.GONE);
         if (!show || !miniShown) return;
+        if (miniEmbed != null) {
+            // Embed-Player meldet seinen Zustand laufend; vor dem ersten Bericht gilt er als laufend
+            onMiniPlaybackState(miniEmbedState == -1 || isEmbedPlaying());
+            return;
+        }
         WebView yt = webViews[TAB_YOUTUBE];
         if (yt == null) return;
         yt.evaluateJavascript(JS_PIP_IS_PLAYING, r -> onMiniPlaybackState("true".equals(r)));
     }
 
     private void toggleMiniPlayback() {
+        miniUserToggled = true;
+        if (miniEmbed != null) {
+            miniEmbed.evaluateJavascript("window.gwrToggle?window.gwrToggle():false",
+                    r -> onMiniPlaybackState("true".equals(r)));
+            return;
+        }
         WebView yt = webViews[TAB_YOUTUBE];
         if (yt == null) return;
-        miniUserToggled = true;
         yt.evaluateJavascript(JS_PIP_TOGGLE, r -> onMiniPlaybackState("true".equals(r)));
     }
 
@@ -1169,7 +1394,10 @@ public class OverlayService extends Service {
                     prefs.edit().putString(KEY_URL_PREFIX + tabIndex, url).apply();
                 }
                 // Neue Seite im Mini-Player geladen: wieder nur das Video zeigen
-                if (miniShown && tabIndex == TAB_YOUTUBE) view.evaluateJavascript(JS_PIP_ENTER, null);
+                // (nicht, solange der Embed-Player spielt: dann ist die Seite ausgeblendet)
+                if (miniShown && miniEmbed == null && tabIndex == TAB_YOUTUBE) {
+                    view.evaluateJavascript(JS_PIP_ENTER, null);
+                }
             }
         });
         wv.setWebChromeClient(new WebChromeClient() {

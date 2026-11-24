@@ -71,6 +71,123 @@ final class YouTubeLinks {
     }
 
     /**
+     * Video-ID einer YouTube-Adresse: /watch?v=ID, /shorts/ID, /live/ID, /embed/ID, /v/ID
+     * und youtu.be/ID. null für andere Seiten (Suche, Kanal, /live ohne ID …) und ungültige IDs.
+     */
+    static String videoIdOf(String url) {
+        if (!isYouTubeUrl(url)) return null;
+        String host = hostOf(url);
+        String rest = url.trim();
+        rest = rest.substring(rest.indexOf(':') + 1);
+        int start = 0;
+        while (start < rest.length() && (rest.charAt(start) == '/' || rest.charAt(start) == '\\')) {
+            start++;
+        }
+        rest = rest.substring(start);
+        int hash = rest.indexOf('#');
+        if (hash >= 0) rest = rest.substring(0, hash);
+        int q = rest.indexOf('?');
+        String query = q >= 0 ? rest.substring(q + 1) : "";
+        String beforeQuery = q >= 0 ? rest.substring(0, q) : rest;
+        int pathStart = -1;
+        for (int i = 0; i < beforeQuery.length(); i++) {
+            char c = beforeQuery.charAt(i);
+            if (c == '/' || c == '\\') {
+                pathStart = i;
+                break;
+            }
+        }
+        String path = pathStart >= 0 ? beforeQuery.substring(pathStart).replace('\\', '/') : "/";
+        String[] seg = path.split("/"); // seg[0] ist leer (Pfad beginnt mit "/")
+
+        String id = null;
+        if (host.equals("youtu.be") || host.endsWith(".youtu.be")) {
+            id = seg.length > 1 ? seg[1] : null;
+        } else if (seg.length > 1 && "watch".equals(seg[1].toLowerCase(Locale.ROOT))) {
+            id = queryParam(query, "v");
+        } else if (seg.length > 2) {
+            String kind = seg[1].toLowerCase(Locale.ROOT);
+            if (kind.equals("shorts") || kind.equals("live") || kind.equals("embed") || kind.equals("v")) {
+                id = seg[2];
+            }
+        }
+        return isValidVideoId(id) ? id : null;
+    }
+
+    // ------------------------------------------------------------------ Embed-Player (Mini-Player)
+
+    /** Fallback-Origin, falls der Paketname keinen gültigen Hostnamen ergibt. */
+    static final String DEFAULT_EMBED_ORIGIN = "https://gwrhub.app";
+
+    /**
+     * Origin der Seite, in die der Embed-Player eingebettet wird ("https://" + Paketname).
+     * YouTube verlangt für eingebettete Player einen Referer bzw. eine Origin (sonst Fehler 153);
+     * eine WebView mit loadData() hätte keinen. Nur [a-z0-9.-], damit der Wert gefahrlos in
+     * HTML/JS eingesetzt werden kann.
+     */
+    static String embedOrigin(String packageName) {
+        if (packageName == null) return DEFAULT_EMBED_ORIGIN;
+        String p = packageName.trim().toLowerCase(Locale.ROOT);
+        if (p.isEmpty() || p.startsWith(".") || p.endsWith(".") || p.contains("..")) {
+            return DEFAULT_EMBED_ORIGIN;
+        }
+        for (int i = 0; i < p.length(); i++) {
+            char c = p.charAt(i);
+            boolean ok = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' || c == '-';
+            if (!ok) return DEFAULT_EMBED_ORIGIN;
+        }
+        return "https://" + p;
+    }
+
+    /** Name des Java-Objekts, über das die Embed-Seite Zustand und Fehler meldet. */
+    static final String EMBED_BRIDGE = "GWRMini";
+
+    /**
+     * HTML-Seite mit dem YouTube-IFrame-Player für den Mini-Player. Sie wird per
+     * loadDataWithBaseURL(origin + "/") geladen und
+     *  - startet das Video ab {@code startSeconds} automatisch (ohne YouTube-Bedienelemente,
+     *    die Touches gehen ohnehin an die Bedienebene des Overlays),
+     *  - meldet über {@link #EMBED_BRIDGE} onReady(), onState(Zustand, Sekunden) – bei jeder
+     *    Zustandsänderung und alle 500 ms – sowie onError(Code), z. B. 101/150, wenn das Video
+     *    nicht eingebettet werden darf,
+     *  - bietet gwrToggle() (→ true, wenn es danach läuft) und gwrPause().
+     *
+     * @return null bei ungültiger Video-ID
+     */
+    static String embedHostHtml(String videoId, double startSeconds, String origin) {
+        if (!isValidVideoId(videoId)) return null;
+        // nur Werte, wie embedOrigin() sie liefert (sicher für HTML/JS)
+        boolean safe = origin != null && origin.startsWith("https://")
+                && origin.equals(embedOrigin(origin.substring("https://".length())));
+        String o = safe ? origin : DEFAULT_EMBED_ORIGIN;
+        long start = Double.isNaN(startSeconds) || startSeconds < 0 ? 0 : (long) Math.floor(startSeconds);
+        return "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
+                + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+                + "<style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}"
+                + "#p,iframe{position:fixed;left:0;top:0;width:100%;height:100%;border:0}</style>"
+                + "</head><body><div id=\"p\"></div><script>"
+                + "var B=window." + EMBED_BRIDGE + ",P=null,R=false,L=-2;"
+                + "function st(){if(!R)return -1;try{return P.getPlayerState();}catch(e){return -1;}}"
+                + "function rep(){if(!B)return;var t=-1;"
+                + "if(R){try{t=P.getCurrentTime();}catch(e){}}"
+                + "B.onState(st(),(typeof t==='number'&&isFinite(t))?t:-1);}"
+                + "function onYouTubeIframeAPIReady(){P=new YT.Player('p',{width:'100%',height:'100%',"
+                + "videoId:'" + videoId + "',host:'https://www.youtube.com',"
+                + "playerVars:{autoplay:1,playsinline:1,controls:0,disablekb:1,fs:0,rel:0,"
+                + "iv_load_policy:3,start:" + start + ",origin:'" + o + "',widget_referrer:'" + o + "'},"
+                + "events:{onReady:function(e){R=true;try{e.target.playVideo();}catch(x){}"
+                + "if(B)B.onReady();rep();},"
+                + "onStateChange:function(){rep();},"
+                + "onError:function(e){if(B)B.onError(e&&typeof e.data==='number'?e.data:-1);}}});}"
+                + "setInterval(rep,500);"
+                + "window.gwrToggle=function(){if(!R)return false;var s=st();"
+                + "if(s===1||s===3){P.pauseVideo();return false;}P.playVideo();return true;};"
+                + "window.gwrPause=function(){if(R){try{P.pauseVideo();}catch(e){}}};"
+                + "</script><script src=\"https://www.youtube.com/iframe_api\"></script>"
+                + "</body></html>";
+    }
+
+    /**
      * Adresse, die der Tab beim ersten Laden öffnet: die gespeicherte Seite, sofern sie zu
      * YouTube gehört, sonst die Standardsuche.
      */
@@ -225,6 +342,17 @@ final class YouTubeLinks {
             if (!ok) return null;
         }
         return s.substring(0, colon).toLowerCase(Locale.ROOT);
+    }
+
+    /** Erster Wert eines Query-Parameters (URL-dekodiert) oder null. */
+    private static String queryParam(String query, String name) {
+        if (query == null || query.isEmpty()) return null;
+        for (String part : query.split("&")) {
+            int eq = part.indexOf('=');
+            String key = eq >= 0 ? part.substring(0, eq) : part;
+            if (name.equals(key)) return eq >= 0 ? decode(part.substring(eq + 1)) : "";
+        }
+        return null;
     }
 
     private static String encode(String s) {

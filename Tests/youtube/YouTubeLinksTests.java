@@ -195,6 +195,61 @@ public final class YouTubeLinksTests {
             eq(null, YouTubeLinks.resolveAppLink("https://gwpvx.fandom.com/"));
         });
 
+        // ------------------------------------------------------------ Video-ID / Embed-Player
+        test("videoIdOf finds the ID in watch, shorts, live, embed and youtu.be links", () -> {
+            eq(VIDEO_ID, YouTubeLinks.videoIdOf("https://m.youtube.com/watch?v=" + VIDEO_ID));
+            eq(VIDEO_ID, YouTubeLinks.videoIdOf("https://www.youtube.com/watch?feature=share&v="
+                    + VIDEO_ID + "&t=42s#comments"));
+            eq(VIDEO_ID, YouTubeLinks.videoIdOf("https://m.youtube.com/shorts/" + VIDEO_ID));
+            eq(VIDEO_ID, YouTubeLinks.videoIdOf("https://www.youtube.com/live/" + VIDEO_ID + "?si=x"));
+            eq(VIDEO_ID, YouTubeLinks.videoIdOf("https://www.youtube-nocookie.com/embed/" + VIDEO_ID));
+            eq(VIDEO_ID, YouTubeLinks.videoIdOf("https://youtu.be/" + VIDEO_ID + "?t=10"));
+            eq(VIDEO_ID, YouTubeLinks.videoIdOf("HTTPS://M.YOUTUBE.COM/WATCH?v=" + VIDEO_ID));
+        });
+
+        test("videoIdOf returns null for non-video pages and invalid IDs", () -> {
+            String[] none = {
+                    YouTubeLinks.DEFAULT_SEARCH_URL,
+                    "https://m.youtube.com/",
+                    "https://m.youtube.com/@SomeChannel/live",
+                    "https://m.youtube.com/watch?v=too-short",
+                    "https://m.youtube.com/watch?list=PL123",
+                    "https://example.org/watch?v=" + VIDEO_ID,
+                    "https://youtube.com@example.org/watch?v=" + VIDEO_ID,
+                    null, ""
+            };
+            for (String url : none) eq(null, YouTubeLinks.videoIdOf(url), String.valueOf(url));
+        });
+
+        test("embedOrigin uses the package name as https origin", () -> {
+            eq("https://com.gwrhub.hub", YouTubeLinks.embedOrigin("com.GWRHub.hub"));
+            eq(YouTubeLinks.DEFAULT_EMBED_ORIGIN, YouTubeLinks.embedOrigin("com.gwr_hub.app"));
+            eq(YouTubeLinks.DEFAULT_EMBED_ORIGIN, YouTubeLinks.embedOrigin("evil'); alert(1)//"));
+            eq(YouTubeLinks.DEFAULT_EMBED_ORIGIN, YouTubeLinks.embedOrigin(".."));
+            eq(YouTubeLinks.DEFAULT_EMBED_ORIGIN, YouTubeLinks.embedOrigin(null));
+        });
+
+        test("embedHostHtml embeds the video with start time, origin and the bridge", () -> {
+            String html = YouTubeLinks.embedHostHtml(VIDEO_ID, 83.9, "https://com.gwrhub.hub");
+            check(html != null, "html built");
+            check(html.contains("videoId:'" + VIDEO_ID + "'"), "video id");
+            check(html.contains("start:83,"), "start rounded down to whole seconds");
+            check(html.contains("origin:'https://com.gwrhub.hub'"), "origin");
+            check(html.contains("widget_referrer:'https://com.gwrhub.hub'"), "referrer");
+            check(html.contains("window." + YouTubeLinks.EMBED_BRIDGE), "bridge");
+            check(html.contains("https://www.youtube.com/iframe_api"), "iframe api");
+            check(html.contains("autoplay:1"), "autoplay");
+        });
+
+        test("embedHostHtml rejects bad IDs and unsafe origins", () -> {
+            eq(null, YouTubeLinks.embedHostHtml("x'+alert(1)+'", 0, "https://com.gwrhub.hub"));
+            eq(null, YouTubeLinks.embedHostHtml(null, 0, "https://com.gwrhub.hub"));
+            String html = YouTubeLinks.embedHostHtml(VIDEO_ID, -5, "https://a'b");
+            check(html.contains("origin:'" + YouTubeLinks.DEFAULT_EMBED_ORIGIN + "'"), "unsafe origin replaced");
+            check(html.contains("start:0,"), "negative start clamped");
+            check(YouTubeLinks.embedHostHtml(VIDEO_ID, Double.NaN, null).contains("start:0,"), "NaN start");
+        });
+
         // ------------------------------------------------------------ Ausführen
         int failed = 0;
         for (int i = 0; i < cases.size(); i++) {
